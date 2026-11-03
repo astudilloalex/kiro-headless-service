@@ -1,0 +1,8 @@
+{
+  "note": "Merge the server into service.json mcp_servers and authorize its ID in consumers; note is not a service setting.",
+  "remote": {
+    "url": "https://mcp.example.com/mcp",
+    "header_refs": {"Authorization": "file:/run/secrets/mcp_authorization"},
+    "tools": ["lookup"]
+  }
+}

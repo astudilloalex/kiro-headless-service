@@ -1,0 +1,111 @@
+name: validate
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: false
+        type: string
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17.11-bookworm@sha256:839fbb5a4942a7758dd93e18b42ea5649807491a0545b5eeeb8f0b8bb11857a5
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: kiro_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U test -d kiro_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      KHS_DATABASE_URL: postgresql+psycopg://test:test-only@localhost:5432/kiro_test
+      TEST_DATABASE_URL: postgresql+psycopg://test:test-only@localhost:5432/kiro_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.13.13'}
+      - uses: astral-sh/setup-uv@v6
+        with: {version: '0.12.5', enable-cache: true}
+      - run: uv sync --frozen
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - run: uv run mypy src
+      - run: uv run alembic upgrade head
+      - run: uv run alembic check
+      - run: uv run alembic downgrade base
+      - run: uv run alembic upgrade head
+      - run: uv run pytest -q
+      - run: uv run python scripts/check_openapi.py
+      - run: uv build --no-sources
+      - run: python scripts/check_distribution.py
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: docker/setup-buildx-action@v3
+      - run: docker build --load -t kiro-headless-service:local .
+      - run: docker run --rm kiro-headless-service:local runtime-info
+      - name: Start API, worker and PostgreSQL without provider credentials
+        env:
+          SERVICE_API_TOKEN: ci-test-token-at-least-24-characters
+          POSTGRES_PASSWORD: ci-test-database-only
+          KHS_ENGINE: simulated
+        run: docker compose up -d --no-build
+      - name: Check image startup and durable execution
+        env: {SERVICE_API_TOKEN: ci-test-token-at-least-24-characters}
+        run: python scripts/container_smoke.py
+      - name: Check restart
+        env:
+          SERVICE_API_TOKEN: ci-test-token-at-least-24-characters
+          POSTGRES_PASSWORD: ci-test-database-only
+          KHS_ENGINE: simulated
+        run: docker compose restart api worker && python scripts/container_smoke.py
+      - if: always()
+        env:
+          SERVICE_API_TOKEN: ci-test-token-at-least-24-characters
+          POSTGRES_PASSWORD: ci-test-database-only
+        run: docker compose down -v
+  arm-provider:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.ref }}
+      - run: docker build -t kiro-service:arm64 .
+      - run: docker run --rm kiro-service:arm64 runtime-info
+  rootless-podman:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.ref }}
+      - name: Prepare ephemeral runner for rootless user namespaces
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman uidmap
+          if sysctl kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          test "$(podman info --format '{{.Host.Security.Rootless}}')" = true
+      - run: podman build -t localhost/kiro-headless-service:ci .
+      - name: Rootless UID mapping, read-only mounts, PostgreSQL and restarts
+        env:
+          KHS_IMAGE: localhost/kiro-headless-service:ci
+          SERVICE_API_TOKEN: ci-podman-token-at-least-24-characters
+          POSTGRES_PASSWORD: ci-podman-database-only
+        run: bash scripts/podman_smoke.sh

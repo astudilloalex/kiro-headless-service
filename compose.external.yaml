@@ -1,0 +1,39 @@
+# Run with: docker compose --env-file .env -f compose.external.yaml up -d
+name: kiro-headless-external
+x-service: &service
+  image: ${KHS_IMAGE:-kiro-headless-service:local}
+  init: true
+  user: "10001:10001"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 256
+  mem_limit: 1g
+  tmpfs: [/tmp:rw,nosuid,nodev,size=512m,mode=1777]
+  volumes:
+    - ${KHS_CONFIG_FILE:-./examples/service.json}:/config/service.json:ro
+    - ${KHS_KIRO_CONFIG_HOST_DIR:-./examples/kiro}:/config/kiro:ro
+  environment: &environment
+    KHS_DATABASE_URL: ${KHS_DATABASE_URL:?Set an external PostgreSQL connection URL}
+    KHS_ENGINE: ${KHS_ENGINE:-kiro}
+    KHS_KIRO_CONFIG_DIR: /config/kiro
+    SERVICE_API_TOKEN: ${SERVICE_API_TOKEN:?Set an independent API token}
+services:
+  migrate:
+    <<: *service
+    command: [migrate]
+  api:
+    <<: *service
+    command: [api]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+    ports: ["127.0.0.1:8000:8000"]
+    restart: unless-stopped
+  worker:
+    <<: *service
+    command: [worker]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+    environment:
+      <<: *environment
+      KIRO_API_KEY: ${KIRO_API_KEY:-}
+    stop_grace_period: 20s
+    restart: unless-stopped

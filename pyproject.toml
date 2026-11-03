@@ -1,0 +1,58 @@
+[project]
+name = "kiro-headless-service"
+version = "0.1.0"
+description = "Independent HTTP service with durable Kiro jobs"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+license = "MIT"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.34,<1",
+  "pydantic>=2.10,<3",
+  "sqlalchemy>=2.0.38,<2.1",
+  "psycopg[binary]>=3.2,<4",
+  "alembic>=1.14,<2",
+  "httpx>=0.28,<1",
+  "jsonschema>=4.23,<5",
+  "pyyaml>=6.0.2,<7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<10",
+    "pytest-asyncio>=0.25,<2",
+    "ruff>=0.11,<1",
+    "mypy>=1.15,<2",
+    "types-jsonschema>=4.23",
+    "types-pyyaml>=6.0.12.20261103",
+]
+
+[project.scripts]
+kiro-service = "kiro_headless_service.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ASYNC240"]
+"src/kiro_headless_service/infrastructure/process.py" = ["ASYNC109"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+packages = ["kiro_headless_service"]
+mypy_path = "src"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = ["integration: requires TEST_DATABASE_URL PostgreSQL", "kiro: opt-in provider inference"]

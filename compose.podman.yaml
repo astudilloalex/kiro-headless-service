@@ -1,0 +1,14 @@
+# Rootless Podman: map the invoking host user to the image's non-root service UID.
+# Use :z because API, worker and migration containers share these read-only mounts.
+x-podman: &podman
+  userns_mode: keep-id:uid=10001,gid=10001
+  volumes:
+    - ${KHS_CONFIG_FILE:-./examples/service.json}:/config/service.json:ro,z
+    - ${KHS_KIRO_CONFIG_HOST_DIR:-./examples/kiro}:/config/kiro:ro,z
+services:
+  api:
+    <<: *podman
+  worker:
+    <<: *podman
+  migrate:
+    <<: *podman

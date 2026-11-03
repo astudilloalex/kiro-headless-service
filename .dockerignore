@@ -1,0 +1,15 @@
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!src/**
+!src/
+!alembic.ini
+!migrations/**
+!migrations/
+!examples/mcp_echo.py
+!examples/
+!scripts/
+!scripts/fetch_kiro.py
+!scripts/check_cli.py

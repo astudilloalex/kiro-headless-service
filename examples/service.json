@@ -1,0 +1,29 @@
+{
+  "engine": "kiro",
+  "consumers": {
+    "example": {
+      "token_ref": "env:SERVICE_API_TOKEN",
+      "profiles": ["default", "structured", "mcp"],
+      "agents": ["concise", "reviewer"],
+      "mcp": ["echo"],
+      "max_running": 1,
+      "max_queued": 100
+    }
+  },
+  "profiles": {
+    "default": {"instructions": "Respond helpfully and concisely."},
+    "structured": {
+      "description": "An example validated structured response",
+      "response_format": {"type": "json_schema", "schema": {
+        "type": "object", "properties": {"answer": {"type": "string"}},
+        "required": ["answer"], "additionalProperties": false
+      }}
+    },
+    "mcp": {"description": "Allows the explicitly selected MCP tools"}
+  },
+  "mcp_servers": {
+    "echo": {"command": "/usr/local/bin/python", "args": ["/app/examples/mcp_echo.py"], "tools": ["echo"]}
+  },
+  "callback_urls": [],
+  "sse_enabled": true
+}

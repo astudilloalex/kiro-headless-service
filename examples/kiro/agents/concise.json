@@ -1,0 +1,9 @@
+{
+  "name": "concise",
+  "description": "Concise responses using native V3 configuration",
+  "prompt": "file://../resources/concise.md",
+  "tools": [],
+  "permissions": {"rules": []},
+  "includeMcpJson": false,
+  "includePowers": false
+}

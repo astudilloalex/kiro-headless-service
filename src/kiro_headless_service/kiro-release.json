@@ -1,0 +1,17 @@
+{
+  "version": "2.37.1",
+  "engine": "v3",
+  "index_url": "https://prod.download.cli.kiro.dev/stable/index.json",
+  "packages": {
+    "amd64": {
+      "url": "https://prod.download.cli.kiro.dev/stable/2.37.1/kirocli-x86_64-linux.tar.gz",
+      "sha256": "cf6c7438934a169781b3d564e81bcdfccac901c5d659f35235ac19e0d01192a3",
+      "size": 167270966
+    },
+    "arm64": {
+      "url": "https://prod.download.cli.kiro.dev/stable/2.37.1/kirocli-aarch64-linux.tar.gz",
+      "sha256": "10f0318a379b27ba9bbfb2a06b33db2abaedcde2ea0c10f46e3cffbce86368aa",
+      "size": 161749566
+    }
+  }
+}
