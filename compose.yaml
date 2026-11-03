@@ -9,7 +9,8 @@ x-service: &service
   security_opt: [no-new-privileges:true]
   pids_limit: 256
   mem_limit: 1g
-  tmpfs: [/tmp:rw,nosuid,nodev,size=512m,mode=1777]
+  tmpfs:
+    - "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
   volumes:
     - ${KHS_CONFIG_FILE:-./examples/service.json}:/config/service.json:ro
     - ${KHS_KIRO_CONFIG_HOST_DIR:-./examples/kiro}:/config/kiro:ro
@@ -30,7 +31,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
     volumes: [postgres:/var/lib/postgresql/data]
     healthcheck:
-      test: [CMD-SHELL, "pg_isready -U kiro -d kiro"]
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -U kiro -d kiro"]
       interval: 5s
       timeout: 3s
       retries: 20

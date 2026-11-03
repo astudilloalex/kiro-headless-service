@@ -11,9 +11,21 @@ task_volume="${task_prefix}-pg"
 task_port="${KHS_SMOKE_PORT:-18080}"
 task_root="$(cd "$(dirname "$0")/.." && pwd)"
 cleanup() {
+  local task_status=$?
+  if [ "$task_status" -ne 0 ]; then
+    echo "Rootless smoke failed; container state and logs before cleanup:" >&2
+    for task_component in pg migrate worker api; do
+      local task_container="${task_prefix}-${task_component}"
+      if podman container exists "$task_container"; then
+        podman inspect --format '{{.Name}} status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}}' "$task_container" >&2 || true
+        podman logs --tail=200 "$task_container" >&2 || true
+      fi
+    done
+  fi
   podman rm -f "${task_prefix}-api" "${task_prefix}-worker" "${task_prefix}-migrate" "${task_prefix}-pg" >/dev/null 2>&1 || true
   podman volume rm "$task_volume" >/dev/null 2>&1 || true
   podman network rm "$task_network" >/dev/null 2>&1 || true
+  return "$task_status"
 }
 trap cleanup EXIT
 podman network create "$task_network" >/dev/null
@@ -24,7 +36,7 @@ podman run -d --name "${task_prefix}-pg" --network "$task_network" \
   -v "$task_volume:/var/lib/postgresql/data:Z" \
   docker.io/library/postgres:17.11-bookworm@sha256:839fbb5a4942a7758dd93e18b42ea5649807491a0545b5eeeb8f0b8bb11857a5 >/dev/null
 for task_attempt in $(seq 1 60); do
-  if podman exec "${task_prefix}-pg" pg_isready -U kiro -d kiro >/dev/null 2>&1; then break; fi
+  if podman exec "${task_prefix}-pg" pg_isready -h 127.0.0.1 -U kiro -d kiro >/dev/null 2>&1; then break; fi
   if [ "$task_attempt" -eq 60 ]; then exit 1; fi
   sleep 1
 done

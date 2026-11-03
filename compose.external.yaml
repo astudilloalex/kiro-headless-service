@@ -9,7 +9,8 @@ x-service: &service
   security_opt: [no-new-privileges:true]
   pids_limit: 256
   mem_limit: 1g
-  tmpfs: [/tmp:rw,nosuid,nodev,size=512m,mode=1777]
+  tmpfs:
+    - "/tmp:rw,nosuid,nodev,size=512m,mode=1777"
   volumes:
     - ${KHS_CONFIG_FILE:-./examples/service.json}:/config/service.json:ro
     - ${KHS_KIRO_CONFIG_HOST_DIR:-./examples/kiro}:/config/kiro:ro

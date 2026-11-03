@@ -22,7 +22,7 @@ jobs:
           POSTGRES_DB: kiro_test
         ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U test -d kiro_test"
+          --health-cmd "pg_isready -h 127.0.0.1 -U test -d kiro_test"
           --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       KHS_DATABASE_URL: postgresql+psycopg://test:test-only@localhost:5432/kiro_test
@@ -50,6 +50,10 @@ jobs:
       - run: python scripts/check_distribution.py
   image:
     runs-on: ubuntu-24.04
+    env:
+      SERVICE_API_TOKEN: ci-test-token-at-least-24-characters
+      POSTGRES_PASSWORD: ci-test-database-only
+      KHS_ENGINE: simulated
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,24 +63,18 @@ jobs:
       - run: docker build --load -t kiro-headless-service:local .
       - run: docker run --rm kiro-headless-service:local runtime-info
       - name: Start API, worker and PostgreSQL without provider credentials
-        env:
-          SERVICE_API_TOKEN: ci-test-token-at-least-24-characters
-          POSTGRES_PASSWORD: ci-test-database-only
-          KHS_ENGINE: simulated
         run: docker compose up -d --no-build
       - name: Check image startup and durable execution
-        env: {SERVICE_API_TOKEN: ci-test-token-at-least-24-characters}
         run: python scripts/container_smoke.py
       - name: Check restart
-        env:
-          SERVICE_API_TOKEN: ci-test-token-at-least-24-characters
-          POSTGRES_PASSWORD: ci-test-database-only
-          KHS_ENGINE: simulated
         run: docker compose restart api worker && python scripts/container_smoke.py
-      - if: always()
-        env:
-          SERVICE_API_TOKEN: ci-test-token-at-least-24-characters
-          POSTGRES_PASSWORD: ci-test-database-only
+      - name: Container diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps -a || true
+          docker compose logs --no-color --tail=200 || true
+      - name: Clean up containers and test database
+        if: always()
         run: docker compose down -v
   arm-provider:
     runs-on: ubuntu-24.04-arm

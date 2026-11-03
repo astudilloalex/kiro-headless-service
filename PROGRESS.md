@@ -35,16 +35,30 @@ Domain/application ports remain independent of Kiro commands and SQLAlchemy. No 
 
 ## Verification
 
-- Final regression: 119 passed, 1 skipped with temporary PostgreSQL; provider smoke omitted.
+- Final regression: 133 passed, 1 skipped with temporary PostgreSQL; provider smoke omitted.
 - Ruff format/check, strict mypy, frozen lock, OpenAPI and Alembic checks passed.
 - Wheel/sdist built; release JSON present and readable from an isolated wheel import.
 - API/worker source smoke passed, including native JSON/Markdown agents and chat after restart.
-- Four Compose combinations parse; shell/workflow syntax and local documentation links checked.
+- Four Compose combinations have one valid tmpfs per service; rootless UID/mount settings,
+  shell/workflow syntax and local documentation links checked.
 - Official amd64 CLI 2.37.1 version/V3 help/settings verified without inference. Signed-out
   native-agent validation required login and was not counted as success.
-- Docker socket denied and rootless Podman user namespace creation denied by this environment.
-  OCI builds/startup, real inference/MCP and native arm64 execution remain for the prepared CI
-  and credentialed smoke checks. No remote Actions run, image publication or pull was performed.
+- Rootless Podman execution became available during the CI repair. Complete amd64 image build
+  and scripts/podman_smoke.sh passed: migrations, API/worker, native-agent jobs, UID mapping,
+  restart, cleanup and actual image runtime-info. Application inference was simulated.
+- Docker socket remains denied. Docker-engine/hosted reruns, real inference/MCP and native
+  arm64 execution remain unverified. No hosted run or image publication was performed here.
+
+## CI startup repair
+
+- Fixed comma-separated tmpfs options being parsed as separate YAML list entries in both
+  Compose variants. Added structural mount regression checks.
+- Readiness polling tolerates initial connection resets/disconnects/refusal and HTTP 503,
+  preserves its timeout and fails immediately on other HTTP errors. Job POSTs are not retried.
+- PostgreSQL readiness requires TCP, avoiding the temporary initialization server.
+- Both engines print container state/logs before failure cleanup; Docker CI uses consistent
+  simulated-mode environment across steps.
+- Fourteen new regression cases passed, including an actual dropped HTTP connection.
 
 Full evidence and repeat commands: docs/verification.md. No code implementation milestone
 remains open; unavailable external verification is recorded explicitly.
