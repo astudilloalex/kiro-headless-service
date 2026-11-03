@@ -13,6 +13,7 @@ from pydantic import Field, PrivateAttr, model_validator
 from kiro_headless_service.application.contracts import ResponseFormat, StrictModel
 from kiro_headless_service.domain.model import Consumer, ServiceError
 from kiro_headless_service.infrastructure.agents import AgentCatalog, parse_agent
+from kiro_headless_service.infrastructure.bootstrap import DEFAULT_CACHE
 from kiro_headless_service.infrastructure.release import AGENT_ENGINE, CLI_VERSION
 
 ID = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
@@ -127,6 +128,9 @@ class Settings(StrictModel):
     host: str = "0.0.0.0"
     port: int = Field(default=8000, ge=1, le=65535)
     cli_path: str = "/opt/kiro/bin/kiro-cli"
+    cli_bootstrap: Literal["installed", "download", "offline"] = "installed"
+    cli_cache_dir: str = DEFAULT_CACHE
+    kiro_proxy_env_refs: dict[str, str] = Field(default_factory=dict)
     kiro_config_dir: str | None = None
     max_agent_files: int = Field(default=128, ge=1, le=1024)
     max_agent_file_bytes: int = Field(default=262144, ge=1024, le=1048576)
@@ -182,6 +186,14 @@ class Settings(StrictModel):
 
     @model_validator(mode="after")
     def consistent(self) -> Self:
+        if not Path(self.cli_cache_dir).is_absolute():
+            raise ValueError("cli_cache_dir must be absolute")
+        if set(self.kiro_proxy_env_refs) - {"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"}:
+            raise ValueError(
+                "only explicit HTTP_PROXY/HTTPS_PROXY/NO_PROXY references are supported"
+            )
+        if any(not ref.startswith(("env:", "file:")) for ref in self.kiro_proxy_env_refs.values()):
+            raise ValueError("proxy configuration requires secret references")
         if self.database_url_file:
             self.database_url = secret("file:" + self.database_url_file)
         if not self.database_url.startswith("postgresql+psycopg://"):
@@ -240,7 +252,15 @@ class Settings(StrictModel):
     def fingerprint(self) -> str:
         # Shared limits must agree between every API and worker. No secret values in this digest.
         data = self.model_dump(
-            exclude={"database_url", "database_url_file", "host", "port", "cli_path"}
+            exclude={
+                "database_url",
+                "database_url_file",
+                "host",
+                "port",
+                "cli_path",
+                "cli_bootstrap",
+                "cli_cache_dir",
+            }
         )
         data["agent_catalog_digest"] = self._catalog.digest
         data["cli_version"], data["agent_engine"] = self.cli_version, self.agent_engine
@@ -347,6 +367,7 @@ class Policy:
             ),
             "profile_permissions": profile.permissions,
             "kiro_key_ref": s.kiro_key_ref,
+            "kiro_proxy_env_refs": s.kiro_proxy_env_refs,
             "instructions": profile.instructions + "\n" + agent.get("prompt", ""),
             "tools": agent.get("tools", []) if request["agent"] else profile.tools,
             "mcp": {k: s.mcp(k).model_dump() for k in request["mcp_servers"]},

@@ -6,10 +6,10 @@ have been superseded. No KIRO_API_KEY was available; provider inference tests we
 
 | Check | Actual result |
 |---|---|
-| Ruff format/check across repository | Passed, 55 formatted Python files |
-| Strict mypy | Passed, 23 source files |
+| Ruff format/check across repository | Passed, 58 formatted Python files |
+| Strict mypy | Passed, 25 source files |
 | Frozen dependency lock | Passed with uv lock --check --offline, 46 packages |
-| Full suite with PostgreSQL 17 | **133 passed, 1 skipped** (explicit provider smoke), 6.91 seconds |
+| Full suite with PostgreSQL 17 | **136 passed, 1 skipped** (explicit provider smoke), 6.75 seconds |
 | Alembic check | Passed; no model/schema drift. Initial upgrade/downgrade/re-upgrade previously passed; this migration changes no database schema |
 | Separate API/worker source HTTP smoke | Passed before and after restart: no-agent job, JSON/Markdown native-agent jobs and persisted four-message conversation, explicitly simulated inference |
 | Python wheel and source distribution | Built with uv build --no-sources --offline; release JSON present in both; isolated wheel resource import returns 2.37.1/v3 |
@@ -22,17 +22,17 @@ have been superseded. No KIRO_API_KEY was available; provider inference tests we
 | Actual native-agent validation | Signed-out agent validate probe returned login-required; **not a successful validation** |
 | Real provider authentication/inference/MCP | Not verified; no valid credential. Executable-double success does not verify provider wire compatibility |
 | Docker image build/startup | Not executed: Docker daemon socket access denied; sudo fallback blocked by no-new-privileges |
-| Rootless Podman image build/startup | **Passed** after container execution permissions became available: complete amd64 image build, PostgreSQL/migrations/API/worker, native-agent jobs, UID 10001, restart, cleanup and image runtime-info; inference explicitly simulated |
+| Rootless Podman image build/startup | **Passed**: public bootstrap amd64 image build, first official CLI download/checksum verification, PostgreSQL/migrations/API/worker, native-agent jobs, UID 10001, restart, cleanup and no-network/read-only CLI-cache verification; inference explicitly simulated |
 | Native arm64 Kiro execution | Not executed locally; official metadata pinned and native arm64 build/runtime-info job prepared in CI |
 | GitHub-hosted CI | User supplied failing Docker/Podman logs; fixes tested locally. No hosted rerun dispatched during this repair |
-| GHCR publication / anonymous pull | Not performed. Complete CLI-image publication is opt-in and requires a private target package |
+| GHCR publication / anonymous pull | Existing public v1.0.0 queried anonymously, pulled and inspected offline: no CLI in /opt or PATH. No new image publication or visibility change performed |
 
 The final suite covers strict input, schema validation, ownership, idempotency, shared quotas,
 leases/fencing, conservative retries, ordered chat, retention, SSE, artifacts, webhook outbox
 atomicity, repeated notification IDs and destination restrictions. Native-agent cases cover
 JSON/Markdown parsing, unsafe/duplicate YAML, file limits, link/path rejection, prompt/resources,
 immutable snapshots, profile tool ceilings, required native MCP and secret references. The
-publication guard rejects public/internal packages and failed visibility checks.
+publication tests require the installer-based target and anonymous pull verification.
 
 Subprocess tests use an executable double and exercise the real process supervisor, V3
 arguments/configuration, required MCP handshake/tool calls, malformed/partial/excessive output,
@@ -67,6 +67,37 @@ Docker daemon access remains denied locally, so the Docker-engine run and hosted
 remain unverified. The Compose-generated Docker configuration was checked structurally for
 all four deployment combinations. No provider inference or publication was performed.
 
+## Public installer image and restricted-server support
+
+The public default target now ships the installer and pinned manifest, with no CLI binary.
+Users chose download-on-start after reviewing the standard redistribution restrictions.
+The worker acquires/verifies its exact runtime on the deployer's machine. An imported cache
+supports servers that cannot reach registries/download sites but can reach Kiro/AWS.
+The earlier private preinstalled-image workflow was removed; its access restriction did not
+itself grant redistribution rights.
+
+- First acquisition and immutable cache reuse are tested; checksum failures never publish a
+  partial runtime. Cache corruption/symlinks fail explicitly without automatic replacement.
+- Offline missing-cache checks perform no network access and create no cache directory.
+- Prepared-cache reuse performs no writes and passed inside an actual container with
+  --network=none, read-only root and a read-only cache volume.
+- The new public bootstrap image built and passed scripts/podman_smoke.sh end-to-end locally.
+- Base/external PostgreSQL Compose variants and their rootless/offline overlays were checked
+  structurally. The offline overlay selects offline mode and a read-only external cache.
+- Explicit proxy env:/file: references reach the actual executable double; resolved proxy
+  credentials stay out of snapshots and result echoes are rejected. Real proxy/private-route
+  inference remains unverified without KIRO_API_KEY.
+- After the final proxy-password component redaction adjustment, the installer/bootstrap/
+  publication/runtime subset passed again: 38 tests. The full regression above preceded that
+  narrow adjustment; unrelated database behavior did not change.
+- Wheel/sdist built after this change and contain the immutable release manifest.
+
+The old published v1.0.0 remains unchanged. Its anonymous GHCR metadata reports kiro-service api
+as the default command; running that artifact offline confirmed that /opt/kiro/bin/kiro-cli
+does not exist and kiro-cli is absent from PATH. A new release is needed for the bootstrap
+behavior. The publication workflow verifies a genuinely anonymous pull using fresh Docker
+credentials; it was not dispatched here.
+
 ## Repeat the checks
 
 Use a **dedicated disposable database**: the integration fixture truncates service tables.
@@ -86,7 +117,7 @@ uv build --no-sources
 uv run python scripts/check_distribution.py
 ```
 
-With a working rootless Podman host, CI builds the default complete image, verifies its CLI,
+With a working rootless Podman host, CI builds the default bootstrap image, prepares its CLI,
 then runs scripts/podman_smoke.sh against API/worker/PostgreSQL and restarts. The Docker job
 does the equivalent simulated application smoke. The native arm64 job executes the actual CLI
 version/help inside the image; Python compilation alone is not treated as platform support.

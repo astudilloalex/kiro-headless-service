@@ -8,6 +8,7 @@ test "$(podman info --format '{{.Host.Security.Rootless}}')" = true
 task_prefix="khs-smoke-$$"
 task_network="${task_prefix}-net"
 task_volume="${task_prefix}-pg"
+task_cli_volume="${task_prefix}-cli"
 task_port="${KHS_SMOKE_PORT:-18080}"
 task_root="$(cd "$(dirname "$0")/.." && pwd)"
 cleanup() {
@@ -24,12 +25,19 @@ cleanup() {
   fi
   podman rm -f "${task_prefix}-api" "${task_prefix}-worker" "${task_prefix}-migrate" "${task_prefix}-pg" >/dev/null 2>&1 || true
   podman volume rm "$task_volume" >/dev/null 2>&1 || true
+  podman volume rm "$task_cli_volume" >/dev/null 2>&1 || true
   podman network rm "$task_network" >/dev/null 2>&1 || true
   return "$task_status"
 }
 trap cleanup EXIT
 podman network create "$task_network" >/dev/null
 podman volume create "$task_volume" >/dev/null
+podman volume create "$task_cli_volume" >/dev/null
+# First download runs on the deployer's machine. Reuse is verified with no network later.
+podman run --rm --userns=keep-id:uid=10001,gid=10001 --user 10001:10001 \
+  --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m,mode=1777 \
+  --cap-drop=ALL --security-opt=no-new-privileges \
+  -v "$task_cli_volume:/var/lib/kiro" "$KHS_IMAGE" prepare-runtime
 export POSTGRES_DB=kiro POSTGRES_USER=kiro
 podman run -d --name "${task_prefix}-pg" --network "$task_network" \
   -e POSTGRES_PASSWORD -e POSTGRES_USER -e POSTGRES_DB \
@@ -57,6 +65,7 @@ podman exec "${task_prefix}-worker" python -c 'import os; assert os.getuid() == 
 podman restart "${task_prefix}-api" "${task_prefix}-worker" >/dev/null
 python3 "$task_root/scripts/container_smoke.py"
 # Provider presence/help is checked independently, with no mounted configuration or account key.
-podman run --rm --userns=keep-id:uid=10001,gid=10001 --user 10001:10001 \
+podman run --rm --network=none --userns=keep-id:uid=10001,gid=10001 --user 10001:10001 \
   --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m,mode=1777 --cap-drop=ALL \
-  --security-opt=no-new-privileges "$KHS_IMAGE" runtime-info
+  --security-opt=no-new-privileges -e KHS_CLI_BOOTSTRAP=offline \
+  -v "$task_cli_volume:/var/lib/kiro:ro" "$KHS_IMAGE" runtime-info

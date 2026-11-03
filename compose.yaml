@@ -18,6 +18,9 @@ x-service: &service
     KHS_DATABASE_URL: postgresql+psycopg://kiro:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/kiro
     KHS_ENGINE: ${KHS_ENGINE:-kiro}
     KHS_KIRO_CONFIG_DIR: /config/kiro
+    KHS_CLI_BOOTSTRAP: ${KHS_CLI_BOOTSTRAP:-download}
+    KHS_CLI_CACHE_DIR: /var/lib/kiro
+    KHS_KIRO_PROXY_ENV_REFS: "${KHS_KIRO_PROXY_ENV_REFS:-{}}"
     SERVICE_API_TOKEN: ${SERVICE_API_TOKEN:?Set a unique API token of at least 24 characters}
   depends_on:
     postgres: {condition: service_healthy}
@@ -56,7 +59,15 @@ services:
     environment:
       <<: *environment
       KIRO_API_KEY: ${KIRO_API_KEY:-}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,postgres}
+    volumes:
+      - ${KHS_CONFIG_FILE:-./examples/service.json}:/config/service.json:ro
+      - ${KHS_KIRO_CONFIG_HOST_DIR:-./examples/kiro}:/config/kiro:ro
+      - kiro-cli:/var/lib/kiro
     stop_grace_period: 20s
     restart: unless-stopped
 volumes:
+  kiro-cli:
   postgres:

@@ -74,6 +74,29 @@ async def test_required_mcp_missing(settings, fake_cli):
         await KiroRuntime(str(fake_cli), settings.temp_dir).execute(snap, "scenario:mcp", discard)
 
 
+@pytest.mark.parametrize("expose_secret", [False, True])
+async def test_explicit_proxy_refs_reach_child_without_entering_snapshot(
+    settings, fake_cli, monkeypatch, tmp_path, expose_secret
+):
+    proxy = "http://user:test-only-password@proxy.internal:8080"
+    monkeypatch.setenv("TEST_PROXY", proxy)
+    bypass = tmp_path / "proxy-bypass"
+    bypass.write_text("localhost,127.0.0.1")
+    settings.kiro_proxy_env_refs = {
+        "HTTPS_PROXY": "env:TEST_PROXY",
+        "NO_PROXY": "file:" + str(bypass),
+    }
+    snap = snapshot(settings)
+    assert proxy not in json.dumps(snap)
+    prompt = "scenario:proxy-secret" if expose_secret else "scenario:proxy"
+    if expose_secret:
+        with pytest.raises(RuntimeFailure, match="SENSITIVE_OUTPUT_REJECTED"):
+            await KiroRuntime(str(fake_cli), settings.temp_dir).execute(snap, prompt, discard)
+    else:
+        output = await KiroRuntime(str(fake_cli), settings.temp_dir).execute(snap, prompt, discard)
+        assert output.text == "Runtime reply"
+
+
 async def test_timeout_and_artifacts(settings, fake_cli):
     snap = snapshot(settings)
     output = await KiroRuntime(str(fake_cli), settings.temp_dir).execute(

@@ -28,15 +28,9 @@ EXPOSE 8000
 ENTRYPOINT ["kiro-service"]
 CMD ["api"]
 
-FROM ${PYTHON_IMAGE} AS provider
-WORKDIR /build
-COPY scripts/fetch_kiro.py scripts/check_cli.py /build/scripts/
-COPY src/kiro_headless_service/kiro-release.json /build/src/kiro_headless_service/kiro-release.json
-RUN python scripts/fetch_kiro.py --output /opt/kiro \
-    && python scripts/check_cli.py --cli /opt/kiro/bin/kiro-cli \
-       --manifest /build/src/kiro_headless_service/kiro-release.json
-
-# Default deployment image. Public service-only builds must explicitly select --target service.
-FROM service AS kiro
-LABEL org.opencontainers.image.licenses="MIT AND LicenseRef-Kiro"
-COPY --from=provider /opt/kiro /opt/kiro
+# Public deployment image: the CLI is acquired on the deployer's machine.
+FROM service AS runtime
+USER root
+RUN mkdir -p /var/lib/kiro && chown 10001:10001 /var/lib/kiro
+ENV KHS_CLI_BOOTSTRAP=download KHS_CLI_CACHE_DIR=/var/lib/kiro
+USER 10001:10001

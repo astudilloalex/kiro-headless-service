@@ -6,6 +6,7 @@ import stat
 import tempfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit
 
 from kiro_headless_service.application.contracts import bounded_json
 from kiro_headless_service.application.ports import EventSink
@@ -252,6 +253,16 @@ class KiroRuntime:
             )
             mcp: dict[str, Any] = {}
             runtime_secrets = [env["KIRO_API_KEY"]]
+            try:
+                for name, ref in snapshot.get("kiro_proxy_env_refs", {}).items():
+                    env[name] = secret(ref)
+                    runtime_secrets.append(env[name])
+                    if name in {"HTTP_PROXY", "HTTPS_PROXY"}:
+                        password = urlsplit(env[name]).password
+                        if password:
+                            runtime_secrets.extend((password, unquote(password)))
+            except (ValueError, OSError) as exc:
+                raise RuntimeFailure("KIRO_PROXY_CREDENTIAL_MISSING") from exc
             tools = list(snapshot["tools"])
             try:
 

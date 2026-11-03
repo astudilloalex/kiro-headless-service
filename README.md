@@ -5,8 +5,12 @@ persistent conversations, administrator-approved MCP servers, validated results,
 events/SSE and durable webhooks. There is no frontend or graphical documentation.
 This is not an official Kiro product and does not expose every Kiro capability automatically.
 
-**This release uses Kiro CLI 2.37.1 and engine V3. CI builds the deployment image with that CLI
-inside. Deployers select an image tag/digest; they configure their own agents and credentials.**
+**This release pins Kiro CLI 2.37.1 and engine V3 in the CI-built public image's manifest.
+The worker downloads the verified CLI on the deployer's machine and caches it; a prepared
+cache supports installation without access to registries/download sites.** Deployers select
+an image tag/digest and configure their own agents and credentials. The image itself does not
+redistribute the proprietary binary. The already-published v1.0.0 service-only image predates
+this bootstrap behavior; publish a new service release to deploy these changes.
 The sole release manifest is [kiro-release.json](src/kiro_headless_service/kiro-release.json).
 Runtime `KHS_CLI_VERSION` / `KHS_AGENT_ENGINE` overrides and inline `agents` definitions are
 rejected. Updating Kiro means updating the release manifest, testing and producing a new image.
@@ -117,14 +121,21 @@ podman pull IMAGE_FROM_YOUR_CI
 podman compose -f compose.yaml -f compose.podman.yaml up -d --no-build
 ```
 
-The image with Kiro is a separate private deployment artifact because public redistribution
-rights for the proprietary CLI are not assumed. [Publishing](docs/publishing.md) explains the
-public service-only image and opt-in private CLI-image workflow. Nothing was published by the
-implementation agent. For a local build of the same complete image, use:
+The public runtime image can be pulled anonymously after its GHCR package visibility is
+Public. The publishing workflow builds target `runtime` and verifies an anonymous pull.
+The first real worker startup acquires the exact official archive, verifies size/SHA-256,
+and atomically publishes it into the `kiro-cli` volume. Subsequent starts verify and reuse it.
+API, migrations, dispatcher-only and explicitly simulated workers do not download Kiro.
+`prepare-runtime` preloads it without an account key or inference; `runtime-info` checks it.
 
 ```sh
 podman build -t kiro-headless-service:local .
 ```
+
+For restricted servers, import the OCI images and a prepared CLI cache, then use
+[offline installation](docs/offline-installation.md) with `compose.offline.yaml`. That mode
+performs no CLI download. Real inference still requires the permitted connection to Kiro.
+[Publishing](docs/publishing.md) explains release tags and public package visibility.
 
 Rootless Compose maps the invoking host user to container UID/GID 10001 so owner-readable
 configuration/secret mounts work without chmod 777 or recursive ownership changes. Shared
@@ -134,7 +145,7 @@ no-new-privileges and an init reaper. No privileged mode or engine socket is nee
 PostgreSQL persists in a named volume. API is published on localhost:8000; provide your own TLS
 reverse proxy for public access. [Rootless smoke](scripts/podman_smoke.sh) uses only Podman CLI.
 
-Docker uses `docker compose up -d --no-build` with the same complete image and base Compose
+Docker uses `docker compose up -d --no-build` with the same runtime image and base Compose
 file. For an external database set `KHS_DATABASE_URL` and use `compose.external.yaml` (plus
 `compose.podman.yaml` for Podman). Configure PostgreSQL TLS/certificates and URL-encode passwords.
 Only real target-platform runtime checks establish provider compatibility; see the ledger.
@@ -143,7 +154,7 @@ Only real target-platform runtime checks establish provider compatibility; see t
 
 Credentials are separate: deployer's `KIRO_API_KEY`; independent API consumer tokens (random,
 at least 24 characters); PostgreSQL credentials; optional MCP/service secrets. Registry login
-may also be needed to pull a private image. One instance uses one Kiro account. Consumers
+is unnecessary for a public GHCR package. One instance uses one Kiro account. Consumers
 cannot submit their own Kiro keys per request. Builds/migrations/ordinary tests need no Kiro key.
 
 ```sh

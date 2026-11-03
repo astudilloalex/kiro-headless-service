@@ -15,6 +15,7 @@ from sqlalchemy import text
 from kiro_headless_service.api.app import create_app
 from kiro_headless_service.composition import worker
 from kiro_headless_service.domain.model import RuntimeFailure
+from kiro_headless_service.infrastructure.bootstrap import DEFAULT_CACHE, prepare_cli
 from kiro_headless_service.infrastructure.config import Policy, load_settings, secret
 from kiro_headless_service.infrastructure.release import RELEASE
 from kiro_headless_service.infrastructure.runtime import KiroRuntime
@@ -25,17 +26,40 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Independent API for durable Kiro execution")
     parser.add_argument(
         "mode",
-        choices=["api", "worker", "migrate", "diagnose", "openapi", "cleanup", "runtime-info"],
+        choices=[
+            "api",
+            "worker",
+            "migrate",
+            "diagnose",
+            "openapi",
+            "cleanup",
+            "runtime-info",
+            "prepare-runtime",
+        ],
     )
     parser.add_argument("--component", choices=["all", "runner", "dispatcher"], default="all")
+    parser.add_argument("--archive", type=Path, help="Official CLI archive for offline preparation")
+    parser.add_argument("--cache-dir", help="Absolute runtime cache directory")
     args = parser.parse_args()
     try:
-        if args.mode == "runtime-info":
+        if args.mode in {"runtime-info", "prepare-runtime"}:
+            cli_path = prepare_cli(
+                "offline"
+                if args.archive
+                else (
+                    "download"
+                    if args.mode == "prepare-runtime"
+                    else os.environ.get("KHS_CLI_BOOTSTRAP", "installed")
+                ),
+                args.cache_dir or os.environ.get("KHS_CLI_CACHE_DIR", DEFAULT_CACHE),
+                os.environ.get("KHS_CLI_PATH", "/opt/kiro/bin/kiro-cli"),
+                args.archive,
+            )
             with tempfile.TemporaryDirectory(prefix="khs-runtime-info-") as directory:
                 asyncio.run(
-                    KiroRuntime(
-                        os.environ.get("KHS_CLI_PATH", "/opt/kiro/bin/kiro-cli"), directory
-                    ).check(RELEASE["version"], "env:KIRO_API_KEY", require_key=False)
+                    KiroRuntime(cli_path, directory).check(
+                        RELEASE["version"], "env:KIRO_API_KEY", require_key=False
+                    )
                 )
             print(
                 json.dumps(
@@ -95,7 +119,12 @@ def main() -> None:
                 Path(settings.temp_dir).mkdir(parents=True, exist_ok=True, mode=0o700)
                 try:
                     asyncio.run(
-                        KiroRuntime(settings.cli_path, settings.temp_dir).check(
+                        KiroRuntime(
+                            prepare_cli(
+                                settings.cli_bootstrap, settings.cli_cache_dir, settings.cli_path
+                            ),
+                            settings.temp_dir,
+                        ).check(
                             settings.cli_version,
                             settings.kiro_key_ref,
                             require_key=False,

@@ -11,7 +11,10 @@ All ordinary settings require coordinated API/worker restart. Accepted jobs keep
 | `KHS_ENGINE` (`engine`) | kiro or explicitly simulated; never a fallback | no | `"kiro"` | enum=['kiro', 'simulated'] | yes |
 | `KHS_HOST` (`host`) | API listen address | no | `"0.0.0.0"` | See notes | yes |
 | `KHS_PORT` (`port`) | API listen port | no | `8000` | minimum=1, maximum=65535 | yes |
-| `KHS_CLI_PATH` (`cli_path`) | Installed CLI path; source/testing escape hatch, image default is fixed | no | `"/opt/kiro/bin/kiro-cli"` | See notes | yes |
+| `KHS_CLI_PATH` (`cli_path`) | Installed CLI path used only in installed mode; cache modes derive their path from the pinned release | no | `"/opt/kiro/bin/kiro-cli"` | See notes | yes |
+| `KHS_CLI_BOOTSTRAP` (`cli_bootstrap`) | installed: use cli_path; download: acquire pinned runtime if missing; offline: require prepared cache | no | source: `installed`; public image/Compose: `download` | installed/download/offline | yes |
+| `KHS_CLI_CACHE_DIR` (`cli_cache_dir`) | Absolute root containing version/architecture/hash-specific runtime caches | no | source: `/tmp/kiro-service/cli`; image: `/var/lib/kiro` | absolute directory, writable only for initial preparation | yes |
+| `KHS_KIRO_PROXY_ENV_REFS` (`kiro_proxy_env_refs`) | Explicit HTTP_PROXY/HTTPS_PROXY/NO_PROXY secret references passed to Kiro subprocesses | no | `{}` | env:/file: references; no other variable names | yes |
 | `KHS_KIRO_CONFIG_DIR` (`kiro_config_dir`) | Absolute native configuration root with agents/, resources/, skills/, steering/ | when agents are authorized | `null` | See notes | yes |
 | `KHS_MAX_AGENT_FILES` (`max_agent_files`) | Maximum regular files captured from the native configuration root | no | `128` | minimum=1, maximum=1024 | yes |
 | `KHS_MAX_AGENT_FILE_BYTES` (`max_agent_file_bytes`) | Maximum bytes per native configuration file | no | `262144` | minimum=1024, maximum=1048576 | yes |

@@ -1,49 +1,22 @@
-import io
-import json
-import runpy
-import urllib.error
-import urllib.request
+from pathlib import Path
 
-import pytest
+import yaml
 
 
-@pytest.mark.parametrize(
-    "status,visibility,allowed",
-    [
-        (200, "private", True),
-        (404, None, True),
-        (200, "public", False),
-        (200, "internal", False),
-        (200, None, False),
-        (401, None, False),
-        (403, None, False),
-        (500, None, False),
-    ],
-)
-def test_provider_publication_requires_verified_private_target(
-    monkeypatch, status, visibility, allowed
-):
-    for key, value in {
-        "OWNER": "example-org",
-        "OWNER_TYPE": "Organization",
-        "REPOSITORY": "Service",
-        "GH_TOKEN": "test-only-token",
-    }.items():
-        monkeypatch.setenv(key, value)
+def test_publication_uses_bootstrap_image_and_checks_anonymous_pull():
+    workflow = yaml.safe_load(Path(".github/workflows/publish.yml").read_text())
+    steps = workflow["jobs"]["publish"]["steps"]
+    build = next(s for s in steps if s.get("id") == "build")
+    assert build["with"]["target"] == "runtime"
+    assert build["with"]["platforms"] == "linux/amd64,linux/arm64"
+    anonymous = next(s for s in steps if s.get("name") == "Verify anonymous pull")
+    assert 'DOCKER_CONFIG="$task_auth_dir" docker pull' in anonymous["run"]
+    assert "check_private_package" not in str(steps)
 
-    def response(request, *, timeout):
-        assert request.full_url == (
-            "https://api.github.com/orgs/example-org/packages/container/service-kiro"
-        )
-        assert request.get_header("Authorization") == "Bearer test-only-token"
-        assert timeout == 20
-        if status != 200:
-            raise urllib.error.HTTPError(request.full_url, status, "test", {}, None)
-        return io.BytesIO(json.dumps({"visibility": visibility}).encode())
 
-    monkeypatch.setattr(urllib.request, "urlopen", response)
-    if allowed:
-        runpy.run_path("scripts/check_private_package.py")
-    else:
-        with pytest.raises(SystemExit, match="publication|publication stopped"):
-            runpy.run_path("scripts/check_private_package.py")
+def test_public_default_image_does_not_copy_the_proprietary_cli():
+    dockerfile = Path("Dockerfile").read_text()
+    assert "FROM service AS runtime" in dockerfile
+    assert "KHS_CLI_BOOTSTRAP=download" in dockerfile
+    assert "COPY --from=provider" not in dockerfile
+    assert "fetch_kiro.py --output" not in dockerfile

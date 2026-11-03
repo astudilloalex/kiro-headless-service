@@ -61,7 +61,13 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
       - uses: docker/setup-buildx-action@v3
       - run: docker build --load -t kiro-headless-service:local .
-      - run: docker run --rm kiro-headless-service:local runtime-info
+      - run: docker volume create khs-ci-cli
+      - run: docker run --rm -v khs-ci-cli:/var/lib/kiro kiro-headless-service:local prepare-runtime
+      - name: Verify cached CLI with no network and read-only filesystem
+        run: >-
+          docker run --rm --network=none --read-only --tmpfs /tmp
+          -e KHS_CLI_BOOTSTRAP=offline -v khs-ci-cli:/var/lib/kiro:ro
+          kiro-headless-service:local runtime-info
       - name: Start API, worker and PostgreSQL without provider credentials
         run: docker compose up -d --no-build
       - name: Check image startup and durable execution
@@ -75,7 +81,9 @@ jobs:
           docker compose logs --no-color --tail=200 || true
       - name: Clean up containers and test database
         if: always()
-        run: docker compose down -v
+        run: |
+          docker compose down -v
+          docker volume rm khs-ci-cli || true
   arm-provider:
     runs-on: ubuntu-24.04-arm
     steps:

@@ -9,6 +9,7 @@ from fastapi import FastAPI
 
 from kiro_headless_service.api.app import create_app
 from kiro_headless_service.application.worker import Dispatcher, Runner
+from kiro_headless_service.infrastructure.bootstrap import prepare_cli
 from kiro_headless_service.infrastructure.config import Settings, load_settings
 from kiro_headless_service.infrastructure.logging import configure_logging
 from kiro_headless_service.infrastructure.notifications import WebhookSender
@@ -29,7 +30,12 @@ async def worker(
 ) -> None:
     configure_logging(settings.log_level)
     store = Store(settings)
-    kiro = KiroRuntime(settings.cli_path, settings.temp_dir)
+    cli_path = settings.cli_path
+    if component != "dispatcher" and settings.engine == "kiro":
+        cli_path = await asyncio.to_thread(
+            prepare_cli, settings.cli_bootstrap, settings.cli_cache_dir, settings.cli_path
+        )
+    kiro = KiroRuntime(cli_path, settings.temp_dir)
     runtime = RuntimeRouter(kiro)
     await asyncio.to_thread(Path(settings.temp_dir).mkdir, parents=True, exist_ok=True, mode=0o700)
     if component != "dispatcher" and settings.engine == "kiro":

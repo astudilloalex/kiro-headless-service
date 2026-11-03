@@ -47,6 +47,7 @@ used no inference. Successful V3 inference and actual provider MCP invocation re
 checks. Subprocess doubles explicitly simulate the protocol and never certify the provider.
 
 amd64 version/help executed locally. arm64 archives are pinned and CI includes native arm64
-CLI checks, but that hosted job was not run from this environment. The complete amd64 image
-built and passed rootless Podman API/worker/PostgreSQL/restart checks with simulated inference,
-plus actual image CLI version/help checks. See verification.md for what actually ran.
+CLI checks, but that hosted job was not run from this environment. The public bootstrap amd64
+image built and passed rootless Podman API/worker/PostgreSQL/restart checks with simulated
+inference. The CLI was downloaded/verified into a cache, then its version/help checked with
+no network and a read-only cache. See verification.md for what actually ran.

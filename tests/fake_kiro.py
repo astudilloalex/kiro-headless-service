@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 def emit(kind, data):
@@ -38,6 +39,11 @@ for resource in agent["resources"]:
 assert "--no-interactive" in sys.argv
 assert "--trust-all-tools" not in sys.argv
 assert "KHS_DATABASE_URL" not in os.environ
+if "scenario:proxy" in prompt:
+    assert os.environ["HTTPS_PROXY"] == "http://user:test-only-password@proxy.internal:8080"
+    assert os.environ["NO_PROXY"] == "localhost,127.0.0.1"
+else:
+    assert not {"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"} & os.environ.keys()
 assert Path(os.environ["HOME"]).is_relative_to(Path.cwd().parent)
 settings = json.loads((Path(os.environ["KIRO_HOME"]) / "settings/cli.json").read_text())
 assert settings["chat.enableKnowledge"] is False
@@ -110,6 +116,8 @@ if "scenario:auth" in prompt:
     sys.exit(1)
 
 text = "Runtime reply"
+if "scenario:proxy-secret" in prompt:
+    text = urlsplit(os.environ["HTTPS_PROXY"]).password
 if "scenario:agent" in prompt:
     assert "custom system instruction" in agent["prompt"]
     text = "Agent reply"

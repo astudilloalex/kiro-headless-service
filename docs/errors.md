@@ -18,7 +18,13 @@ on terminal job status; unsuccessful jobs never expose partial results.
 | Missing worker/migration | NOT_READY / 503 | Run diagnose and apply migrations |
 | Mixed configuration | CONFIGURATION_MISMATCH / 503 | Drain/restart all processes consistently |
 | Provider key missing | KIRO_CREDENTIAL_MISSING | Supply the configured provider secret |
-| Wrong binary | KIRO_VERSION_MISMATCH | Use the CLI packaged by the selected CI image release |
+| Missing offline runtime | KIRO_RUNTIME_CACHE_MISSING | Import the prepared cache for this exact image/architecture; see offline-installation.md |
+| Changed or incomplete cached runtime | KIRO_RUNTIME_CACHE_INVALID | Replace the damaged cache with a verified preparation; no silent download/recovery |
+| Download/archive installation failed | KIRO_INSTALL_FAILED | Check official download reachability, archive SHA-256/size, proxy and writable cache |
+| Concurrent installation timeout | KIRO_INSTALL_LOCK_TIMEOUT | Check another worker's preparation; cache installation lock wait is bounded |
+| Unsupported platform | KIRO_ARCHITECTURE_UNSUPPORTED | Use a tested amd64/arm64 image on the matching platform |
+| Missing proxy secret | KIRO_PROXY_CREDENTIAL_MISSING | Supply the explicit proxy environment/file references |
+| Wrong binary | KIRO_VERSION_MISMATCH | Use the exact CLI selected by the image release manifest |
 | Missing V3 interface | KIRO_V3_CAPABILITY_UNAVAILABLE | Verify the CI image contains the required V3 CLI capabilities |
 | Old queued release | JOB_RELEASE_INCOMPATIBLE | Drain work before upgrading; do not reinterpret old V2 jobs as V3 |
 | Provider auth rejection | KIRO_AUTHENTICATION_FAILED | Revalidate the deployer's key |

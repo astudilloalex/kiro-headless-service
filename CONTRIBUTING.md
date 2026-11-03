@@ -24,6 +24,6 @@ release in src/kiro_headless_service/kiro-release.json (2.37.1 / V3). Distinguis
 from subprocess doubles. Versions are CI-owned, not runtime configuration. Native agents live
 in an external KHS_KIRO_CONFIG_DIR; see examples/kiro for JSON/Markdown files and relative resources.
 Container checks require Docker Compose or working rootless Podman. Run scripts/podman_smoke.sh
-with a complete built image and temporary test credentials; it creates and removes dedicated
+with a built runtime image and temporary test credentials; it creates and removes dedicated
 containers/network/database volume. Public service-only image publication excludes the CLI;
-complete CLI-image publication is opt-in and private under the applicable provider agreement.
+the public image downloads Kiro on the deployer's machine instead of redistributing its binary.

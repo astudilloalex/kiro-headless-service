@@ -1,7 +1,6 @@
 import hashlib
 import io
 import json
-import runpy
 import sys
 import tarfile
 import urllib.request
@@ -9,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-installer = runpy.run_path("scripts/fetch_kiro.py")
+from kiro_headless_service.infrastructure import installer
 
 
 @pytest.fixture
@@ -51,7 +50,7 @@ def test_installer_uses_ci_manifest_and_ignores_runtime_version(release, tmp_pat
     def urlopen(url, **kwargs):
         calls.append(url)
         return io.BytesIO(
-            json.dumps(index).encode() if url == installer["INDEX_URL"] else archive.read_bytes()
+            json.dumps(index).encode() if url == installer.INDEX_URL else archive.read_bytes()
         )
 
     monkeypatch.setattr(urllib.request, "urlopen", urlopen)
@@ -82,7 +81,7 @@ def test_installer_uses_ci_manifest_and_ignores_runtime_version(release, tmp_pat
     ]
     monkeypatch.setenv("KHS_CLI_VERSION", "2.26.1")
     monkeypatch.setattr(sys, "argv", args)
-    installer["main"]()
+    installer.main()
     provenance = json.loads((output / "provenance.json").read_text())
     assert provenance["version"] == "99.1.0"
     assert provenance["engine"] == "v3"
@@ -118,10 +117,10 @@ def test_external_manifest_and_archive_work_offline(release, tmp_path, monkeypat
         )
     )
     output = tmp_path / "install"
-    installer["fetch"]("99.1.0", "arm64", output, archive, manifest)
+    installer.fetch("99.1.0", "arm64", output, archive, manifest)
     assert json.loads((output / "provenance.json").read_text())["version"] == "99.1.0"
     with pytest.raises(ValueError, match="manifest version"):
-        installer["resolve_package"]("99.2.0", "arm64", manifest)
+        installer.resolve_package("99.2.0", "arm64", manifest)
 
 
 @pytest.mark.parametrize("version,arch", [("99.2.0", "arm64"), ("99.1.0", "amd64")])
@@ -131,7 +130,7 @@ def test_unavailable_release_or_architecture_fails(release, monkeypatch, version
         urllib.request, "urlopen", lambda *a, **k: io.BytesIO(json.dumps(index).encode())
     )
     with pytest.raises(ValueError, match="release " + version):
-        installer["resolve_package"](version, arch)
+        installer.resolve_package(version, arch)
 
 
 def test_checksum_failure_preserves_previous_install(release, tmp_path):
@@ -156,13 +155,13 @@ def test_checksum_failure_preserves_previous_install(release, tmp_path):
         )
     )
     with pytest.raises(ValueError, match="integrity check failed"):
-        installer["fetch"]("99.1.0", "arm64", output, archive, manifest)
+        installer.fetch("99.1.0", "arm64", output, archive, manifest)
     assert old.read_text() == "previous executable"
     assert not (output / "provenance.json").exists()
 
 
 def test_baseline_manifest_is_optional_and_usable():
-    package = installer["resolve_package"](
+    package = installer.resolve_package(
         "2.37.1", "amd64", Path("src/kiro_headless_service/kiro-release.json")
     )
     assert package["url"].endswith("/2.37.1/kirocli-x86_64-linux.tar.gz")

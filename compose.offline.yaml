@@ -1,0 +1,8 @@
+# Use after importing both OCI images and the CLI cache prepared on a connected machine.
+# Combine with compose.podman.yaml for rootless UID mapping and shared SELinux labels.
+services:
+  worker:
+    environment:
+      KHS_CLI_BOOTSTRAP: offline
+    volumes:
+      - ${KHS_CLI_CACHE_HOST_DIR:?Set the absolute path of the imported CLI cache}:/var/lib/kiro:ro,z
